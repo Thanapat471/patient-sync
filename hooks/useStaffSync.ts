@@ -6,8 +6,9 @@ import { supabase } from '@/lib/supabase'
 import { useStaffStore, type SessionStatus } from '@/store/useStaffStore'
 import { PATIENT_LOBBY_CHANNEL, patientSessionChannelName } from '@/lib/realtime'
 import { fetchPatientSubmissions } from '@/lib/patientSubmissions'
+import type { Patient } from '@/lib/schema'
 
-type LobbyPresence = { status: SessionStatus }
+type LobbyPresence = { status: SessionStatus; fields?: Partial<Patient> }
 
 export function useStaffSync() {
   const upsertSession = useStaffStore((state) => state.upsertSession)
@@ -56,7 +57,11 @@ export function useStaffSync() {
           } else if (existing) {
             setStatus(sessionId, status)
           } else {
-            upsertSession(sessionId, { fields: {}, status, lastSeen: Date.now() })
+            // First time seeing this session (e.g. this staff tab just
+            // (re)connected) — presence carries a recent fields snapshot so
+            // we don't show "Unnamed patient" until the next keystroke.
+            const fields = presences[0]?.fields ?? {}
+            upsertSession(sessionId, { fields, status, lastSeen: Date.now() })
           }
           joinSessionChannel(sessionId)
         })

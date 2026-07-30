@@ -8,17 +8,25 @@ import type { Patient } from '@/lib/schema'
 import { PATIENT_LOBBY_CHANNEL, patientSessionChannelName } from '@/lib/realtime'
 
 type ThrottledSend = ((field: keyof Patient, value: string) => void) & { cancel: () => void }
+type ThrottledSnapshot = (() => void) & { cancel: () => void }
 
 const IDLE_TIMEOUT_MS = 15_000
+const PRESENCE_SNAPSHOT_INTERVAL_MS = 2_500
 
 export function usePatientSync(sessionId: string) {
   const sendRef = useRef<ThrottledSend | null>(null)
+  const snapshotRef = useRef<ThrottledSnapshot | null>(null)
   const sessionChannelRef = useRef<RealtimeChannel | null>(null)
   const lobbyChannelRef = useRef<RealtimeChannel | null>(null)
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const submittedRef = useRef(false)
   const activeRef = useRef(true)
   const currentStatusRef = useRef<'filling' | 'inactive'>('filling')
+  // A running copy of everything typed so far. Broadcast gives already-connected
+  // staff instant updates; this snapshot rides along in presence so a staff
+  // browser that (re)joins late — e.g. after a page refresh — isn't stuck
+  // showing "Unnamed patient" until the next keystroke.
+  const fieldsSnapshotRef = useRef<Partial<Patient>>({})
 
   // Presence channels can silently drop after a period of inactivity. Phoenix
   // channel objects can only be joined once, so recovering means creating a
@@ -39,6 +47,23 @@ export function usePatientSync(sessionId: string) {
     [sessionId]
   )
 
+  const trackPresence = useCallback(
+    (status: 'filling' | 'inactive') => {
+      const channel = lobbyChannelRef.current
+      const payload = { status, fields: fieldsSnapshotRef.current }
+
+      if (channel?.state === 'joined') {
+        channel.track(payload)
+      } else {
+        if (channel) supabase.removeChannel(channel)
+        joinLobbyChannel(() => {
+          lobbyChannelRef.current?.track(payload)
+        })
+      }
+    },
+    [joinLobbyChannel]
+  )
+
   const setPresenceStatus = useCallback(
     (status: 'filling' | 'inactive') => {
       if (submittedRef.current) return
@@ -46,18 +71,9 @@ export function usePatientSync(sessionId: string) {
       // floods the channel, so only send an update when the status actually flips.
       if (currentStatusRef.current === status) return
       currentStatusRef.current = status
-
-      const channel = lobbyChannelRef.current
-      if (channel?.state === 'joined') {
-        channel.track({ status })
-      } else {
-        if (channel) supabase.removeChannel(channel)
-        joinLobbyChannel(() => {
-          lobbyChannelRef.current?.track({ status })
-        })
-      }
+      trackPresence(status)
     },
-    [joinLobbyChannel]
+    [trackPresence]
   )
 
   const scheduleIdle = useCallback(() => {
@@ -69,6 +85,7 @@ export function usePatientSync(sessionId: string) {
     activeRef.current = true
     submittedRef.current = false
     currentStatusRef.current = 'filling'
+    fieldsSnapshotRef.current = {}
 
     const sessionChannel = supabase.channel(patientSessionChannelName(sessionId))
     sessionChannel.subscribe()
@@ -83,8 +100,14 @@ export function usePatientSync(sessionId: string) {
     }, 300)
     sendRef.current = throttledSend
 
+    const throttledSnapshot: ThrottledSnapshot = throttle(() => {
+      if (submittedRef.current) return
+      trackPresence(currentStatusRef.current)
+    }, PRESENCE_SNAPSHOT_INTERVAL_MS)
+    snapshotRef.current = throttledSnapshot
+
     joinLobbyChannel(() => {
-      lobbyChannelRef.current?.track({ status: 'filling' })
+      trackPresence('filling')
     })
 
     scheduleIdle()
@@ -105,19 +128,23 @@ export function usePatientSync(sessionId: string) {
       window.removeEventListener('focus', handleFocus)
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
       sendRef.current = null
+      snapshotRef.current = null
       throttledSend.cancel()
+      throttledSnapshot.cancel()
       supabase.removeChannel(sessionChannel)
       sessionChannelRef.current = null
       if (lobbyChannelRef.current) supabase.removeChannel(lobbyChannelRef.current)
       lobbyChannelRef.current = null
     }
-  }, [sessionId, scheduleIdle, setPresenceStatus, joinLobbyChannel])
+  }, [sessionId, scheduleIdle, setPresenceStatus, joinLobbyChannel, trackPresence])
 
   const sendFieldUpdate = useCallback(
     (field: keyof Patient, value: string) => {
       sendRef.current?.(field, value)
+      fieldsSnapshotRef.current = { ...fieldsSnapshotRef.current, [field]: value }
       setPresenceStatus('filling')
       scheduleIdle()
+      snapshotRef.current?.()
     },
     [setPresenceStatus, scheduleIdle]
   )
