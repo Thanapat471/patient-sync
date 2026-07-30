@@ -1,4 +1,10 @@
+import type { Metadata } from 'next'
 import PatientForm from '@/components/patient/PatientForm'
+import { Badge } from '@/components/ui/badge'
+
+export const metadata: Metadata = {
+  title: 'Patient registration',
+}
 
 export default async function PatientSessionPage({
   params,
@@ -8,13 +14,23 @@ export default async function PatientSessionPage({
   const { sessionId } = await params
 
   return (
-    <div className="flex flex-1 justify-center bg-zinc-50 px-4 py-10 dark:bg-black sm:px-6">
-      <div className="w-full max-w-3xl">
-        <h1 className="mb-6 text-2xl font-semibold text-foreground">
-          Patient Registration
-        </h1>
-        <PatientForm sessionId={sessionId} />
-      </div>
-    </div>
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
+      <header className="mb-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Patient registration
+          </h1>
+          <Badge variant="outline" className="font-mono">
+            {sessionId.slice(0, 8)}
+          </Badge>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground text-pretty">
+          Fill this in at your own pace — reception can already see your answers
+          as you type, so nothing is lost if you stop partway.
+        </p>
+      </header>
+
+      <PatientForm sessionId={sessionId} />
+    </main>
   )
 }

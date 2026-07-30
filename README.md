@@ -4,13 +4,15 @@ Two pages that stay in sync in real time: a patient fills out a registration for
 and staff watch it fill in live on a separate dashboard, with a status indicator
 that shows whether the patient is actively filling, idle, or has submitted.
 
+- `/` — overview with links into both sides
 - `/patient` — generates a new session, then shows the registration form
 - `/staff` — lists every active patient session and mirrors the selected one live
 
 ## Stack
 
-Next.js (App Router) · TypeScript · Tailwind CSS · Supabase Realtime (Broadcast +
-Presence) · Supabase Postgres · Zustand · React Hook Form + Zod · lodash.throttle
+Next.js (App Router) · TypeScript · Tailwind CSS · shadcn/ui · Supabase Realtime
+(Broadcast + Presence) · Supabase Postgres · Zustand · React Hook Form + Zod ·
+lodash.throttle
 
 ## Setup
 
@@ -82,6 +84,15 @@ flow.
   keystroke.
 - **Resilient presence channel** — the presence connection self-heals if it
   silently drops after a period of inactivity, instead of getting stuck.
+- **Schema-driven UI** — labels, input types and section grouping live in one
+  file (`lib/patientFields.ts`), typed against the Zod schema. Adding a field
+  means editing the schema and that file; both the patient form and the staff
+  mirror pick it up, and forgetting either half fails the type check.
+- **Considered UI/UX** — a design-token layer (light and dark, following the OS
+  with a manual override), mirrored fields that flash when a value arrives so
+  staff can see *where* the patient is typing, a live-pulsing status badge,
+  relative "last seen" timestamps, and a sorted queue that puts actively
+  filling patients first.
 
 ## Known trade-offs
 
