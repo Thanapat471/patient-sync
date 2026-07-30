@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Controller, useForm, type Control, type FieldError } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -123,6 +123,7 @@ function FieldRow({
 }
 
 export default function PatientForm({ sessionId }: { readonly sessionId: string }) {
+  const router = useRouter()
   const [submitted, setSubmitted] = useState(false)
   const { sendFieldUpdate, markSubmitted } = usePatientSync(sessionId)
 
@@ -171,8 +172,16 @@ export default function PatientForm({ sessionId }: { readonly sessionId: string 
               A staff member has already received it. You can close this page.
             </p>
           </div>
-          <Button asChild variant="outline" className="mt-2 h-10 px-4">
-            <Link href="/patient">Start another registration</Link>
+          {/* Minted here rather than by linking to /patient: a <Link> goes
+              through the client Router Cache, which can replay the redirect it
+              already has and hand the next patient the session that was just
+              submitted — overwriting that record. */}
+          <Button
+            variant="outline"
+            className="mt-2 h-10 px-4"
+            onClick={() => router.replace(`/patient/${crypto.randomUUID()}`)}
+          >
+            Start another registration
           </Button>
         </CardContent>
       </Card>

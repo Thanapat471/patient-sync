@@ -166,6 +166,28 @@ There are two Realtime channels in play, plus one Postgres table:
        else: a patient who is gone is gone from the list, not greyed out in
        it. The 15s idle timer is the only thing that produces that badge.
 
+### Session ids must be minted per visit
+
+`/patient` exists only to generate a `crypto.randomUUID()` and redirect to
+`/patient/<uuid>`. Two things make that fragile, and both bit us:
+
+- **It must be `export const dynamic = 'force-dynamic'`.** Otherwise Next.js
+  prerenders the route at build time: `randomUUID()` runs once, the redirect
+  target is baked into the build, and *every* patient on the deployed site
+  lands on the same session — sharing a channel and overwriting each other.
+  Verified against a production build: without the flag, five requests all
+  returned `location: /patient/64146b64-…`; with it, five unique ids.
+- **It must never be prefetched or client-cached.** A `<Link href="/patient">`
+  goes through the client Router Cache, which can replay a redirect it already
+  resolved and hand the next patient a session that was already submitted.
+  Links to it pass `prefetch={false}`, and the "Start another registration"
+  button generates the uuid on the client and calls `router.replace()` rather
+  than routing through `/patient` at all.
+
+As defence in depth, `setField` and `mergeFields` in the store refuse to touch a
+session whose status is already `submitted` — a submitted record is final no
+matter how a stray update reaches it.
+
 3. **`patient_submissions` table** — the only thing written to Postgres.
    Broadcast is ephemeral by design; nothing typed mid-form is persisted. On
    submit: validate with Zod → insert the row → broadcast `submitted`. Staff

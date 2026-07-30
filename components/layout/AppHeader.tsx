@@ -8,8 +8,10 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
 const navItems = [
-  { href: '/patient', label: 'Patient', icon: ClipboardList },
-  { href: '/staff', label: 'Staff', icon: MonitorDot },
+  // /patient mints a new session on every visit, so it must never be
+  // prefetched or served from the client Router Cache.
+  { href: '/patient', label: 'Patient', icon: ClipboardList, prefetch: false },
+  { href: '/staff', label: 'Staff', icon: MonitorDot, prefetch: undefined },
 ]
 
 function ThemeToggle() {
@@ -50,12 +52,13 @@ export default function AppHeader() {
         </Link>
 
         <nav className="flex items-center gap-1">
-          {navItems.map(({ href, label, icon: Icon }) => {
+          {navItems.map(({ href, label, icon: Icon, prefetch }) => {
             const isActive = pathname.startsWith(href)
             return (
               <Link
                 key={href}
                 href={href}
+                prefetch={prefetch}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   'flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50',

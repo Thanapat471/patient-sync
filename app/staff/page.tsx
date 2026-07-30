@@ -74,7 +74,12 @@ export default function StaffPage() {
         body="Sessions appear here the moment a patient opens the registration form. Nothing to do but wait — or start one yourself to try it out."
         action={
           <Button asChild variant="outline" className="mt-2 h-10 px-4">
-            <Link href="/patient" target="_blank" rel="noopener noreferrer">
+            <Link
+              href="/patient"
+              prefetch={false}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               Open a patient form
               <ExternalLink />
             </Link>

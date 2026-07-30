@@ -46,7 +46,8 @@ export default function Home() {
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <Button asChild size="lg" className="h-11 px-5 text-sm">
-            <Link href="/patient">
+            {/* Never prefetched — this route mints a session on every visit. */}
+            <Link href="/patient" prefetch={false}>
               Start patient form
               <ArrowRight />
             </Link>
