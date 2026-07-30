@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm, type FieldError } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { patientSchema, type Patient } from '@/lib/schema'
+import { usePatientSync } from '@/hooks/usePatientSync'
 
 function Field({
   label,
@@ -32,16 +33,26 @@ function Field({
 const inputClass =
   'mt-1 block w-full rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black/40 dark:border-white/20 dark:focus:border-white/40'
 
-export default function PatientForm() {
+export default function PatientForm({ sessionId }: { readonly sessionId: string }) {
   const [submitted, setSubmitted] = useState(false)
+  const sendFieldUpdate = usePatientSync(sessionId)
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<Patient>({
     resolver: zodResolver(patientSchema),
   })
+
+  useEffect(() => {
+    const subscription = watch((value, { name }) => {
+      if (!name) return
+      sendFieldUpdate(name, (value[name] as string) ?? '')
+    })
+    return () => subscription.unsubscribe()
+  }, [watch, sendFieldUpdate])
 
   const onSubmit = (data: Patient) => {
     console.log('patient form submitted', data)
@@ -129,7 +140,7 @@ export default function PatientForm() {
 
       <button
         type="submit"
-        className="mt-2 h-12 rounded-full bg-foreground px-6 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:col-span-2 md:w-[200px]"
+        className="mt-2 h-12 rounded-full bg-foreground px-6 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:col-span-2 md:w-50"
       >
         Submit
       </button>
