@@ -20,6 +20,7 @@ type StaffStore = {
   ) => void
   mergeFields: (sessionId: string, fields: Partial<Patient>) => void
   setStatus: (sessionId: string, status: SessionStatus) => void
+  removeSession: (sessionId: string) => void
   selectSession: (sessionId: string) => void
 }
 
@@ -73,6 +74,19 @@ export const useStaffStore = create<StaffStore>((set) => ({
           ...state.sessions,
           [sessionId]: { ...existing, status },
         },
+      }
+    }),
+
+  removeSession: (sessionId) =>
+    set((state) => {
+      if (!state.sessions[sessionId]) return state
+      const sessions = { ...state.sessions }
+      delete sessions[sessionId]
+      return {
+        sessions,
+        // Don't leave the mirror pointed at a session that no longer exists.
+        selectedSessionId:
+          state.selectedSessionId === sessionId ? null : state.selectedSessionId,
       }
     }),
 
