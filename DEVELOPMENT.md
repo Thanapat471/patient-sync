@@ -151,22 +151,20 @@ There are two Realtime channels in play, plus one Postgres table:
      an idle patient sends no broadcasts at all — for them it's the only
      up-to-date copy a newly connected staff tab can pick up, which is what
      stops the queue showing "Unnamed patient" after a staff refresh.
-   - Closing the patient tab fires Presence's automatic `leave` event. The
-     staff side marks the session `inactive` immediately, then **retires it
-     from the queue after a 15s grace period** if the presence hasn't come
-     back. Without the retirement step the queue only ever grew: every
-     abandoned or reloaded session left a permanent dead row that a page
-     refresh would clear but the live view never did.
-     - The grace period exists because a closed tab and a phone that suspended
-       its socket are indistinguishable from here. A patient who returns
-       within the window keeps their place.
-     - Removal re-checks the session at fire time instead of trusting what it
-       saw when the timer was set: a `submitted` broadcast can arrive after
-       the presence leave (they travel on different channels), and that record
-       must not be thrown away.
+   - Closing the patient tab fires Presence's automatic `leave` event, and the
+     session is **retired from the queue immediately** — the same rule every
+     presence UI follows. Earlier the leave only flipped the badge to
+     `inactive` and left the row behind, so the queue only ever grew: every
+     abandoned or reloaded session left a dead row that a page refresh would
+     clear but the live view never did.
+     - Submitted sessions are exempt. They're real records that outlive the
+       connection, and they're re-read from Postgres on load.
      - Presence state, not the leave event, is the authority — the `sync`
-       handler also retires anything in the store that has vanished from
-       presence, so a dropped or missed `leave` still gets reconciled.
+       handler retires anything in the store that has vanished from presence,
+       so a dropped or missed `leave` still gets reconciled.
+     - This is why `inactive` means *idle but still connected*, and nothing
+       else: a patient who is gone is gone from the list, not greyed out in
+       it. The 15s idle timer is the only thing that produces that badge.
 
 3. **`patient_submissions` table** — the only thing written to Postgres.
    Broadcast is ephemeral by design; nothing typed mid-form is persisted. On
