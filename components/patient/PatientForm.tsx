@@ -5,6 +5,7 @@ import { useForm, type FieldError } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { patientSchema, type Patient } from '@/lib/schema'
 import { usePatientSync } from '@/hooks/usePatientSync'
+import { insertPatientSubmission } from '@/lib/patientSubmissions'
 
 function Field({
   label,
@@ -35,7 +36,8 @@ const inputClass =
 
 export default function PatientForm({ sessionId }: { readonly sessionId: string }) {
   const [submitted, setSubmitted] = useState(false)
-  const sendFieldUpdate = usePatientSync(sessionId)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const { sendFieldUpdate, markSubmitted } = usePatientSync(sessionId)
 
   const {
     register,
@@ -54,9 +56,15 @@ export default function PatientForm({ sessionId }: { readonly sessionId: string 
     return () => subscription.unsubscribe()
   }, [watch, sendFieldUpdate])
 
-  const onSubmit = (data: Patient) => {
-    console.log('patient form submitted', data)
-    setSubmitted(true)
+  const onSubmit = async (data: Patient) => {
+    setSubmitError(null)
+    try {
+      await insertPatientSubmission(sessionId, data)
+      markSubmitted()
+      setSubmitted(true)
+    } catch {
+      setSubmitError('Something went wrong while submitting. Please try again.')
+    }
   }
 
   if (submitted) {
@@ -137,6 +145,10 @@ export default function PatientForm({ sessionId }: { readonly sessionId: string 
       >
         <input className={inputClass} {...register('emergencyContactRelationship')} />
       </Field>
+
+      {submitError && (
+        <p className="text-sm text-red-600 md:col-span-2">{submitError}</p>
+      )}
 
       <button
         type="submit"
