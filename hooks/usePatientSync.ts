@@ -11,7 +11,7 @@ type ThrottledSend = ((field: keyof Patient, value: string) => void) & { cancel:
 type ThrottledSnapshot = (() => void) & { cancel: () => void }
 
 const IDLE_TIMEOUT_MS = 15_000
-const PRESENCE_SNAPSHOT_INTERVAL_MS = 2_500
+const SNAPSHOT_INTERVAL_MS = 3_000
 
 export function usePatientSync(sessionId: string) {
   const sendRef = useRef<ThrottledSend | null>(null)
@@ -22,15 +22,13 @@ export function usePatientSync(sessionId: string) {
   const submittedRef = useRef(false)
   const activeRef = useRef(true)
   const currentStatusRef = useRef<'filling' | 'inactive'>('filling')
-  // A running copy of everything typed so far. Broadcast gives already-connected
-  // staff instant updates; this snapshot rides along in presence so a staff
-  // browser that (re)joins late — e.g. after a page refresh — isn't stuck
-  // showing "Unnamed patient" until the next keystroke.
+  // A running copy of everything typed so far, so a staff dashboard that
+  // connects late can be brought up to date without replaying every keystroke.
   const fieldsSnapshotRef = useRef<Partial<Patient>>({})
 
-  // Presence channels can silently drop after a period of inactivity. Phoenix
-  // channel objects can only be joined once, so recovering means creating a
-  // fresh channel for the same topic rather than resubscribing the old one.
+  // Presence channels can silently drop. Phoenix channel objects can only be
+  // joined once, so recovering means creating a fresh channel for the same
+  // topic rather than resubscribing the old one.
   const joinLobbyChannel = useCallback(
     (onJoined?: () => void) => {
       const channel = supabase.channel(PATIENT_LOBBY_CHANNEL, {
@@ -50,6 +48,8 @@ export function usePatientSync(sessionId: string) {
   const trackPresence = useCallback(
     (status: 'filling' | 'inactive') => {
       const channel = lobbyChannelRef.current
+      // Carrying the snapshot here covers the idle case: an idle patient sends
+      // no broadcasts, so this is the only up-to-date copy staff can pick up.
       const payload = { status, fields: fieldsSnapshotRef.current }
 
       if (channel?.state === 'joined') {
@@ -67,8 +67,9 @@ export function usePatientSync(sessionId: string) {
   const setPresenceStatus = useCallback(
     (status: 'filling' | 'inactive') => {
       if (submittedRef.current) return
-      // Presence is meant for slow-changing state — track() on every keystroke
-      // floods the channel, so only send an update when the status actually flips.
+      // Supabase rate-limits presence and will close the channel if track() is
+      // called on a timer, so it fires only when the status genuinely flips.
+      // Everything high-frequency goes over broadcast instead.
       if (currentStatusRef.current === status) return
       currentStatusRef.current = status
       trackPresence(status)
@@ -100,10 +101,15 @@ export function usePatientSync(sessionId: string) {
     }, 300)
     sendRef.current = throttledSend
 
+    // Broadcast has far higher rate limits than presence, so the periodic
+    // catch-up snapshot for late-joining staff rides on this channel.
     const throttledSnapshot: ThrottledSnapshot = throttle(() => {
-      if (submittedRef.current) return
-      trackPresence(currentStatusRef.current)
-    }, PRESENCE_SNAPSHOT_INTERVAL_MS)
+      sessionChannel.send({
+        type: 'broadcast',
+        event: 'state_snapshot',
+        payload: { fields: fieldsSnapshotRef.current },
+      })
+    }, SNAPSHOT_INTERVAL_MS)
     snapshotRef.current = throttledSnapshot
 
     joinLobbyChannel(() => {
@@ -152,6 +158,7 @@ export function usePatientSync(sessionId: string) {
   const markSubmitted = useCallback(() => {
     submittedRef.current = true
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+    snapshotRef.current?.cancel()
     sessionChannelRef.current?.send({
       type: 'broadcast',
       event: 'submitted',

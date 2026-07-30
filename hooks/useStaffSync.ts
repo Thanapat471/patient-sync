@@ -13,6 +13,7 @@ type LobbyPresence = { status: SessionStatus; fields?: Partial<Patient> }
 export function useStaffSync() {
   const upsertSession = useStaffStore((state) => state.upsertSession)
   const setField = useStaffStore((state) => state.setField)
+  const mergeFields = useStaffStore((state) => state.mergeFields)
   const setStatus = useStaffStore((state) => state.setStatus)
 
   useEffect(() => {
@@ -25,6 +26,11 @@ export function useStaffSync() {
         .channel(patientSessionChannelName(sessionId))
         .on('broadcast', { event: 'field_update' }, ({ payload }) => {
           setField(sessionId, payload.field, payload.value)
+        })
+        // Periodic catch-up for a dashboard that connected mid-session and
+        // therefore missed the earlier keystrokes.
+        .on('broadcast', { event: 'state_snapshot' }, ({ payload }) => {
+          mergeFields(sessionId, payload.fields ?? {})
         })
         .on('broadcast', { event: 'submitted' }, () => {
           setStatus(sessionId, 'submitted')
@@ -66,7 +72,14 @@ export function useStaffSync() {
           joinSessionChannel(sessionId)
         })
       })
-      .on('presence', { event: 'leave' }, ({ key }) => {
+      .on('presence', { event: 'leave' }, ({ key, currentPresences }) => {
+        // Re-calling track() — which the patient does periodically to refresh
+        // its field snapshot — retires the old presence ref and registers a new
+        // one, so a leave fires for a patient who never actually left. Phoenix
+        // reports what's still present for that key; only a genuine departure
+        // leaves nothing behind.
+        if (currentPresences.length > 0) return
+
         const existing = useStaffStore.getState().sessions[key]
         if (existing && existing.status !== 'submitted') {
           setStatus(key, 'inactive')
@@ -80,5 +93,5 @@ export function useStaffSync() {
       sessionChannels.clear()
       supabase.removeChannel(lobbyChannel)
     }
-  }, [upsertSession, setField, setStatus])
+  }, [upsertSession, setField, mergeFields, setStatus])
 }

@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Patient Sync — Patient Form + Staff Live View
 
-## Getting Started
+Two pages that stay in sync in real time: a patient fills out a registration form,
+and staff watch it fill in live on a separate dashboard, with a status indicator
+that shows whether the patient is actively filling, idle, or has submitted.
 
-First, run the development server:
+- `/patient` — generates a new session, then shows the registration form
+- `/staff` — lists every active patient session and mirrors the selected one live
+
+## Stack
+
+Next.js (App Router) · TypeScript · Tailwind CSS · Supabase Realtime (Broadcast +
+Presence) · Supabase Postgres · Zustand · React Hook Form + Zod · lodash.throttle
+
+## Setup
+
+1. Clone the repo and install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+2. Create a Supabase project at [supabase.com](https://supabase.com), then run
+   the SQL in [`supabase/migrations/001_patient_submissions.sql`](supabase/migrations/001_patient_submissions.sql)
+   in the Supabase SQL Editor to create the `patient_submissions` table.
+
+3. Create a `.env.local` file in the project root with:
+
+   ```bash
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxxxxxxxxx
+   ```
+
+   Both values are on the **Project Settings → Data API** page of your Supabase
+   project. `.env.local` is already git-ignored — never commit real keys.
+
+## Running locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run dev       # http://localhost:3000
+npx tsc --noEmit  # type check
+npm run lint      # lint
+npm run build     # production build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `/patient` in one window and `/staff` in another to see the sync live.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploying
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Deployed on Vercel. When importing the repo, add the same two environment
+variables from `.env.local` in the Vercel project settings before the first
+deploy. Every push to `main` redeploys automatically.
 
-## Learn More
+## How the sync works (short version)
 
-To learn more about Next.js, take a look at the following resources:
+- The patient page generates a session id (`crypto.randomUUID()`) and keeps it
+  in the URL (`/patient/<uuid>`).
+- Every keystroke is sent over a Supabase Realtime **broadcast** channel,
+  throttled to one message per 300ms — never on every single keystroke.
+- A separate lightweight **presence** channel lets the staff dashboard discover
+  which sessions are currently active, without needing to know session ids in
+  advance, and tracks a `filling` / `inactive` status.
+- On submit, the data is validated (Zod) and inserted into the
+  `patient_submissions` table, then a `submitted` event is broadcast so the
+  staff badge updates immediately. Staff refreshing the page still sees
+  submitted records, because those are read from the database on load.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+See [`DEVELOPMENT.md`](DEVELOPMENT.md) for the full breakdown, including the
+project structure, responsive design decisions, and the detailed real-time
+flow.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Bonus features (beyond the minimum spec)
 
-## Deploy on Vercel
+- **Multi-session staff dashboard** — staff can see and switch between
+  *multiple* patients filling out forms at the same time, not just one.
+- **Idle detection while still connected** — the status flips to "Inactive"
+  after ~15s of no keystrokes even if the tab stays open and focused, and
+  flips back to "Actively filling" on the next keystroke.
+- **Reload-safe live state** — if a staff browser refreshes mid-session
+  (before the patient submits), it recovers the most recently typed values
+  from Realtime Presence instead of showing "Unnamed patient" until the next
+  keystroke.
+- **Resilient presence channel** — the presence connection self-heals if it
+  silently drops after a period of inactivity, instead of getting stuck.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Known trade-offs
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+No authentication was in scope. Session ids are unguessable UUIDs, and channel
+topics / RLS policies are UUID- and public-role-based rather than
+permission-checked. See [`DEVELOPMENT.md`](DEVELOPMENT.md#security-trade-offs)
+for details.

@@ -18,6 +18,7 @@ type StaffStore = {
     field: K,
     value: Patient[K]
   ) => void
+  mergeFields: (sessionId: string, fields: Partial<Patient>) => void
   setStatus: (sessionId: string, status: SessionStatus) => void
   selectSession: (sessionId: string) => void
 }
@@ -41,6 +42,22 @@ export const useStaffStore = create<StaffStore>((set) => ({
           [sessionId]: {
             ...existing,
             fields: { ...existing.fields, [field]: value },
+            lastSeen: Date.now(),
+          },
+        },
+      }
+    }),
+
+  mergeFields: (sessionId, fields) =>
+    set((state) => {
+      const existing = state.sessions[sessionId]
+      if (!existing) return state
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            ...existing,
+            fields: { ...existing.fields, ...fields },
             lastSeen: Date.now(),
           },
         },
