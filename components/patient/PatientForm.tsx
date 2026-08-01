@@ -38,11 +38,11 @@ function FieldRow({
   control,
   register,
 }: {
-  fieldKey: FieldKey
-  meta: PatientFieldMeta
-  error?: FieldError
-  control: Control<Patient>
-  register: ReturnType<typeof useForm<Patient>>['register']
+  readonly fieldKey: FieldKey
+  readonly meta: PatientFieldMeta
+  readonly error?: FieldError
+  readonly control: Control<Patient>
+  readonly register: ReturnType<typeof useForm<Patient>>['register']
 }) {
   const id = `field-${fieldKey}`
   const errorId = `${id}-error`
@@ -50,9 +50,9 @@ function FieldRow({
 
   let input: React.ReactNode
   if (meta.type === 'select') {
-    // shadcn's Select is a Radix listbox, not a native <select>, so it can't be
-    // wired up with register(). Controller keeps it inside react-hook-form —
-    // which also means the `watch` subscription below still fires for it.
+    // A Radix listbox, not a native <select>, so register() can't drive it.
+    // Controller keeps it inside react-hook-form, and therefore inside the
+    // `watch` subscription that feeds the realtime broadcast.
     input = (
       <Controller
         name={fieldKey}
@@ -123,8 +123,8 @@ function FieldRow({
 }
 
 /**
- * The "are you still there?" prompt. Sticky rather than a modal dialog: a modal
- * would trap focus and block the very typing that dismisses it.
+ * Sticky rather than a modal dialog — a modal would trap focus and block the
+ * very typing that dismisses it.
  */
 function InactivityWarning({ onStayActive }: { readonly onStayActive: () => void }) {
   const [secondsLeft, setSecondsLeft] = useState(
@@ -146,11 +146,10 @@ function InactivityWarning({ onStayActive }: { readonly onStayActive: () => void
         <span>
           <span className="font-medium">Are you still filling this in?</span>{' '}
           <span className="text-muted-foreground">
-            For your privacy, this form clears itself in{' '}
+            {'For your privacy, this form clears itself in '}
             <span className="font-medium tabular-nums text-foreground">
               {secondsLeft}s
             </span>
-            .
           </span>
         </span>
       </span>
@@ -178,8 +177,7 @@ export default function PatientForm({ sessionId }: { readonly sessionId: string 
     resolver: zodResolver(patientSchema),
   })
 
-  // The point of expiring is that the previous patient's details stop being
-  // readable, so drop them from form state too — not just from the screen.
+  // Unmounting the inputs clears the screen; this clears the values behind it.
   useEffect(() => {
     if (sessionState === 'expired') reset()
   }, [sessionState, reset])
@@ -193,10 +191,8 @@ export default function PatientForm({ sessionId }: { readonly sessionId: string 
   }, [watch, sendFieldUpdate])
 
   const onSubmit = async (data: Patient) => {
-    // Pressing Submit is activity. Without this, a patient who reacts to the
-    // inactivity warning by submitting can have the session expire while the
-    // insert is still in flight — expiry untracks presence, staff drops the
-    // session channel, and the `submitted` broadcast that follows is lost.
+    // Submitting is activity. Otherwise a session can expire mid-insert, which
+    // untracks presence and loses the `submitted` broadcast that follows.
     keepSessionAlive()
     try {
       await insertPatientSubmission(sessionId, data)
@@ -249,10 +245,9 @@ export default function PatientForm({ sessionId }: { readonly sessionId: string 
               A staff member has already received it. You can close this page.
             </p>
           </div>
-          {/* Minted here rather than by linking to /patient: a <Link> goes
-              through the client Router Cache, which can replay the redirect it
-              already has and hand the next patient the session that was just
-              submitted — overwriting that record. */}
+          {/* Minted here, not via a <Link> to /patient: the client Router Cache
+              can replay that redirect and hand the next patient the session
+              just submitted, overwriting the record. */}
           <Button
             variant="outline"
             className="mt-2 h-10 px-4"

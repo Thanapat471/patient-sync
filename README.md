@@ -4,6 +4,13 @@ Two pages that stay in sync in real time: a patient fills out a registration for
 and staff watch it fill in live on a separate dashboard, with a status indicator
 that shows whether the patient is actively filling, idle, or has submitted.
 
+**Live demo:** https://patient-sync-azure.vercel.app
+&nbsp;&nbsp;·&nbsp;&nbsp;[Patient form](https://patient-sync-azure.vercel.app/patient)
+&nbsp;&nbsp;·&nbsp;&nbsp;[Staff dashboard](https://patient-sync-azure.vercel.app/staff)
+
+Open `/patient` on a phone and `/staff` on a laptop at the same time to see them
+sync.
+
 - `/` — overview with links into both sides
 - `/patient` — generates a new session, then shows the registration form
 - `/staff` — lists every active patient session and mirrors the selected one live

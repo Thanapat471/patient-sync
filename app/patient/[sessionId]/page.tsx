@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 export default async function PatientSessionPage({
   params,
 }: {
-  params: Promise<{ sessionId: string }>
+  readonly params: Promise<{ sessionId: string }>
 }) {
   const { sessionId } = await params
 
@@ -30,9 +30,8 @@ export default async function PatientSessionPage({
         </p>
       </header>
 
-      {/* Keyed on the session so starting a new registration gives a genuinely
-          fresh component — empty form, cleared timers — rather than one that
-          has to remember to reset itself. */}
+      {/* Keyed so a new registration gets a genuinely fresh component — empty
+          form, cleared timers — rather than one that resets itself. */}
       <PatientForm key={sessionId} sessionId={sessionId} />
     </main>
   )

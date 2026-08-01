@@ -32,8 +32,8 @@ export default function SessionList() {
   const selectedSessionId = useStaffStore((state) => state.selectedSessionId)
   const selectSession = useStaffStore((state) => state.selectSession)
 
-  // One timer for the whole list rather than one per row, purely to keep the
-  // "…s ago" labels moving between realtime events.
+  // One timer for the whole list, not one per row, to keep the "…s ago" labels
+  // moving between realtime events.
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)

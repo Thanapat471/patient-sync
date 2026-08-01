@@ -29,8 +29,7 @@ export function useStaffSync() {
         .on('broadcast', { event: 'field_update' }, ({ payload }) => {
           setField(sessionId, payload.field, payload.value)
         })
-        // Periodic catch-up for a dashboard that connected mid-session and
-        // therefore missed the earlier keystrokes.
+        // Catch-up for a dashboard that connected mid-session.
         .on('broadcast', { event: 'state_snapshot' }, ({ payload }) => {
           mergeFields(sessionId, payload.fields ?? {})
         })
@@ -42,9 +41,8 @@ export function useStaffSync() {
     }
 
     /**
-     * Retire a session the moment its presence is gone — the same rule every
-     * presence UI uses. Submitted sessions are exempt: those are real records
-     * that outlive the connection, and they're re-read from Postgres on load.
+     * Retire a session as soon as its presence is gone. Callers exempt
+     * submitted ones — those are records that outlive the connection.
      */
     function dropSession(sessionId: string) {
       const channel = sessionChannels.get(sessionId)
@@ -59,8 +57,7 @@ export function useStaffSync() {
       .then((submissions) => {
         if (cancelled) return
         submissions.forEach(({ sessionId, fields, submittedAt }) => {
-          // lastSeen is the real submission time from the database, so the
-          // "…ago" label survives a staff refresh instead of resetting.
+          // The real submission time, so "…ago" survives a staff refresh.
           upsertSession(sessionId, { fields, status: 'submitted', lastSeen: submittedAt })
         })
       })
@@ -86,18 +83,16 @@ export function useStaffSync() {
           } else if (existing) {
             setStatus(sessionId, status)
           } else {
-            // First time seeing this session (e.g. this staff tab just
-            // (re)connected) — presence carries a recent fields snapshot so
-            // we don't show "Unnamed patient" until the next keystroke.
+            // First sighting — presence carries a fields snapshot, so a staff
+            // tab that just connected skips straight past "Unnamed patient".
             const fields = presences[0]?.fields ?? {}
             upsertSession(sessionId, { fields, status, lastSeen: Date.now() })
           }
           joinSessionChannel(sessionId)
         })
 
-        // Presence state — not the leave event — is the authority. Reconciling
-        // here as well means a dropped or missed `leave` can't strand a dead
-        // session in the queue, which previously only a page refresh cleared.
+        // Presence state, not the leave event, is the authority — reconciling
+        // here means a missed `leave` can't strand a dead session in the queue.
         Object.entries(useStaffStore.getState().sessions).forEach(
           ([sessionId, session]) => {
             if (session.status === 'submitted') return
@@ -107,10 +102,8 @@ export function useStaffSync() {
         )
       })
       .on('presence', { event: 'leave' }, ({ key, currentPresences }) => {
-        // Re-calling track() retires the old presence ref and registers a new
-        // one, so a leave fires for a patient who never actually left. Phoenix
-        // reports what's still present for that key; only a genuine departure
-        // leaves nothing behind.
+        // Re-calling track() retires the old presence ref, firing a leave for a
+        // patient who never left. Only a genuine departure leaves nothing behind.
         if (currentPresences.length > 0) return
 
         const existing = useStaffStore.getState().sessions[key]

@@ -1,8 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-/* Base styles for the shadcn `radix-nova` preset. This is why the `shadcn`
-   package stays in `dependencies`, not `devDependencies`: it isn't only the
-   CLI, it ships stylesheet the build needs to resolve. */
+/* Base styles for the `radix-nova` preset — which is why the `shadcn` package
+   belongs in `dependencies`: the build has to resolve this stylesheet. */
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -43,7 +42,7 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
 
-  /* Session status. Owned here rather than hardcoded in the badge, so the
+  /* Session status — owned here rather than hardcoded in the badge, so the
      three states stay consistent everywhere they appear. */
   --color-status-filling: var(--status-filling);
   --color-status-filling-bg: var(--status-filling-bg);
@@ -66,8 +65,8 @@
   --animate-field-flash: field-flash 700ms ease-out;
 }
 
-/* A mirrored field briefly lights up when a new value arrives, so staff can
-   see *where* the patient is typing, not just that something changed. */
+/* A mirrored field lights up when a value arrives, so staff can see *where*
+   the patient is typing, not just that something changed. */
 @keyframes field-flash {
   0% {
     background-color: color-mix(in oklab, var(--primary) 14%, transparent);

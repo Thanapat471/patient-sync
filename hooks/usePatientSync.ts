@@ -10,25 +10,15 @@ import { PATIENT_LOBBY_CHANNEL, patientSessionChannelName } from '@/lib/realtime
 type ThrottledSend = ((field: keyof Patient, value: string) => void) & { cancel: () => void }
 type ThrottledSnapshot = (() => void) & { cancel: () => void }
 
-/** Live status only: how long before staff see "Inactive". Nothing is discarded. */
+/** Status only — staff see "Inactive". Nothing is discarded. */
 const IDLE_TIMEOUT_MS = 15_000
 const SNAPSHOT_INTERVAL_MS = 3_000
 
 /**
- * Inactivity session expiry — the kiosk pattern (airport check-in, ATMs), which
- * is what a registration form on a clinic device actually is.
- *
- * This form holds identifying health-adjacent data — name, date of birth,
- * address, religion — so an abandoned session left open on a shared device
- * exposes the previous patient to whoever walks up next. Automatic termination
- * after inactivity is the standard control for exactly this (it's the "automatic
- * logoff" specification in the HIPAA Security Rule, §164.312(a)(2)(iii)).
- *
- * Clearing up the staff queue is a side effect, not the reason: expiry untracks
- * presence, so the dashboard retires the row through its normal leave path.
- *
- * Shorter is safer on a shared device; longer is kinder on a patient's own
- * phone. Drop both values to a few seconds to exercise the flow by hand.
+ * Inactivity expiry, the kiosk pattern. The form holds name, date of birth,
+ * address and religion, so a session abandoned on a shared device exposes the
+ * previous patient to whoever sits down next. Lower both values to a few
+ * seconds to exercise the flow by hand.
  */
 const SESSION_WARNING_AFTER_MS = 3 * 60_000
 export const SESSION_WARNING_GRACE_MS = 60_000
@@ -48,13 +38,11 @@ export function usePatientSync(sessionId: string) {
   const expiredRef = useRef(false)
   const activeRef = useRef(true)
   const currentStatusRef = useRef<'filling' | 'inactive'>('filling')
-  // A running copy of everything typed so far, so a staff dashboard that
-  // connects late can be brought up to date without replaying every keystroke.
+  /** Everything typed so far, so a late-joining dashboard can catch up. */
   const fieldsSnapshotRef = useRef<Partial<Patient>>({})
 
-  // Presence channels can silently drop. Phoenix channel objects can only be
-  // joined once, so recovering means creating a fresh channel for the same
-  // topic rather than resubscribing the old one.
+  // Presence channels can silently drop, and a Phoenix channel can only be
+  // joined once — recovering means a fresh channel object, not a resubscribe.
   const joinLobbyChannel = useCallback(
     (onJoined?: () => void) => {
       const channel = supabase.channel(PATIENT_LOBBY_CHANNEL, {
@@ -74,8 +62,8 @@ export function usePatientSync(sessionId: string) {
   const trackPresence = useCallback(
     (status: 'filling' | 'inactive') => {
       const channel = lobbyChannelRef.current
-      // Carrying the snapshot here covers the idle case: an idle patient sends
-      // no broadcasts, so this is the only up-to-date copy staff can pick up.
+      // An idle patient sends no broadcasts, so the snapshot rides along here
+      // as the only up-to-date copy staff can pick up.
       const payload = { status, fields: fieldsSnapshotRef.current }
 
       if (channel?.state === 'joined') {
@@ -93,9 +81,9 @@ export function usePatientSync(sessionId: string) {
   const setPresenceStatus = useCallback(
     (status: 'filling' | 'inactive') => {
       if (submittedRef.current || expiredRef.current) return
-      // Supabase rate-limits presence and will close the channel if track() is
-      // called on a timer, so it fires only when the status genuinely flips.
-      // Everything high-frequency goes over broadcast instead.
+      // Supabase rate-limits presence and closes the channel if track() runs on
+      // a timer, so it fires only on a genuine flip. High-frequency updates go
+      // over broadcast instead.
       if (currentStatusRef.current === status) return
       currentStatusRef.current = status
       trackPresence(status)
@@ -108,16 +96,12 @@ export function usePatientSync(sessionId: string) {
     expiredRef.current = true
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
     snapshotRef.current?.cancel()
-    // Stop advertising the session. Staff's presence-leave path then retires
-    // the row, so no separate "abandoned" message is needed.
+    // Staff's normal presence-leave path retires the row from here.
     lobbyChannelRef.current?.untrack()
     setSessionState('expired')
   }, [])
 
-  /**
-   * Every timer that hangs off "the patient did something" — reset together so
-   * a keystroke can't refresh one clock while another keeps counting down.
-   */
+  /** Resets all three activity clocks together, so none is left counting down. */
   const scheduleIdle = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
     if (warningTimerRef.current) clearTimeout(warningTimerRef.current)
@@ -127,17 +111,16 @@ export function usePatientSync(sessionId: string) {
     idleTimerRef.current = setTimeout(() => setPresenceStatus('inactive'), IDLE_TIMEOUT_MS)
     warningTimerRef.current = setTimeout(() => {
       setSessionState('warning')
-      // The countdown only starts once the warning is actually on screen, so
-      // the patient always gets the full grace period to respond to it.
+      // Armed only once the warning is on screen, so the patient always gets
+      // the full grace period to react to it.
       expiryTimerRef.current = setTimeout(expireSession, SESSION_WARNING_GRACE_MS)
     }, SESSION_WARNING_AFTER_MS)
   }, [setPresenceStatus, expireSession])
 
   /**
-   * Any sign of life — a keystroke, window focus, the "I'm still here" button,
-   * pressing Submit. Dismisses the warning and restarts the clocks together;
-   * resetting the timers without also clearing the banner would leave a
-   * countdown frozen at 0s over a form that is no longer going to expire.
+   * Any sign of life: a keystroke, window focus, "I'm still here", Submit.
+   * Clears the warning banner as well as the clocks — resetting one without the
+   * other strands a frozen countdown over a form that will no longer expire.
    */
   const keepSessionAlive = useCallback(() => {
     if (expiredRef.current) return
@@ -166,8 +149,8 @@ export function usePatientSync(sessionId: string) {
     }, 300)
     sendRef.current = throttledSend
 
-    // Broadcast has far higher rate limits than presence, so the periodic
-    // catch-up snapshot for late-joining staff rides on this channel.
+    // Broadcast has far higher rate limits than presence, so the catch-up
+    // snapshot for late-joining staff rides on this channel.
     const throttledSnapshot: ThrottledSnapshot = throttle(() => {
       sessionChannel.send({
         type: 'broadcast',
@@ -219,7 +202,7 @@ export function usePatientSync(sessionId: string) {
 
   const sendFieldUpdate = useCallback(
     (field: keyof Patient, value: string) => {
-      // An expired session is over: nothing more goes out on its channels.
+      // Nothing more goes out on an expired session's channels.
       if (expiredRef.current) return
       sendRef.current?.(field, value)
       fieldsSnapshotRef.current = { ...fieldsSnapshotRef.current, [field]: value }

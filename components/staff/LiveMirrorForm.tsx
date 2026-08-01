@@ -17,20 +17,18 @@ function MirrorField({
   readonly label: string
   readonly fullWidth?: boolean
 }) {
-  // One selector per field, so a single keystroke re-renders one value box
-  // instead of the whole dashboard.
+  // One selector per field, so a keystroke re-renders one value box rather
+  // than the whole dashboard.
   const value = useStaffStore((state) => state.sessions[sessionId]?.fields[fieldKey])
 
-  // Select fields sync their option *value* ('male'); show staff the label
-  // the patient saw ('Male').
+  // Selects sync their option value ('male'); show the label ('Male').
   const options = patientFields[fieldKey].options
   const display =
     value && options
       ? (options.find((option) => option.value === value)?.label ?? value)
       : value
 
-  // Remounting the value box on change restarts the flash animation; without
-  // the key it would only ever play once.
+  // Remounting restarts the flash animation; without the key it plays once.
   const [flashKey, setFlashKey] = useState(0)
   const previous = useRef(value)
   useEffect(() => {
@@ -55,8 +53,8 @@ function MirrorField({
 
 export default function LiveMirrorForm({ sessionId }: { readonly sessionId: string }) {
   return (
-    // Same four sections in the same order as the patient's own form, so staff
-    // are looking at the layout the patient is looking at.
+    // Same sections in the same order as the patient's own form, so staff see
+    // the layout the patient is looking at.
     <div className="flex flex-col gap-5">
       {sections.map((section) => (
         <Card key={section.id}>

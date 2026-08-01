@@ -1,15 +1,11 @@
 import type { Patient } from '@/lib/schema'
 
 /**
- * Presentation metadata for the patient form.
- *
- * `lib/schema.ts` still owns the patient *shape*; this file only describes how
- * each of those fields is labelled and rendered. Both the patient form and the
- * staff mirror read from here, so adding a field means touching the schema and
- * this file — and nothing else.
- *
- * Typing it as `Record<keyof Patient, ...>` means a field added to the schema
- * but forgotten here fails `tsc`, rather than silently disappearing from the UI.
+ * How each field is labelled and rendered. `lib/schema.ts` still owns the
+ * patient *shape*; this only describes its presentation. The patient form and
+ * the staff mirror both render from here, so adding a field means editing the
+ * schema and this file — and `Record<keyof Patient, …>` makes forgetting the
+ * second half a `tsc` error rather than a field that silently never appears.
  */
 
 export type PatientFieldSection =
@@ -143,7 +139,7 @@ export const patientFields: Record<keyof Patient, PatientFieldMeta> = {
   },
 }
 
-/** Field keys in declaration order — `Object.keys` loses the `keyof Patient` type. */
+/** In declaration order — `Object.keys` alone loses the `keyof Patient` type. */
 export const patientFieldKeys = Object.keys(patientFields) as (keyof Patient)[]
 
 export function fieldsInSection(section: PatientFieldSection) {

@@ -23,8 +23,8 @@ export default function StatusBadge({
   status,
   className,
 }: {
-  status: SessionStatus
-  className?: string
+  readonly status: SessionStatus
+  readonly className?: string
 }) {
   return (
     <span
@@ -35,8 +35,8 @@ export default function StatusBadge({
       )}
     >
       <span className="relative flex size-1.5">
-        {/* Only the live state pulses — an idle or finished session shouldn't
-            keep drawing the eye across the queue. */}
+        {/* Only the live state pulses; idle and finished shouldn't keep
+            drawing the eye across the queue. */}
         {status === 'filling' && (
           <span
             className={cn(

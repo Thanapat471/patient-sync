@@ -8,8 +8,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
 const navItems = [
-  // /patient mints a new session on every visit, so it must never be
-  // prefetched or served from the client Router Cache.
+  // /patient mints a session per visit — never prefetch or client-cache it.
   { href: '/patient', label: 'Patient', icon: ClipboardList, prefetch: false },
   { href: '/staff', label: 'Staff', icon: MonitorDot, prefetch: undefined },
 ]
@@ -24,9 +23,8 @@ function ThemeToggle() {
       aria-label="Toggle theme"
       onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
     >
-      {/* The server can't know the visitor's OS theme, so which icon shows is
-          decided by CSS off the `.dark` class rather than by render state —
-          otherwise the two markups disagree on first paint. */}
+      {/* CSS decides which icon shows, off the `.dark` class. The server can't
+          know the visitor's OS theme, so deciding in render would mismatch. */}
       <Sun className="hidden dark:block" />
       <Moon className="dark:hidden" />
     </Button>

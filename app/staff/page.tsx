@@ -18,10 +18,10 @@ function EmptyState({
   body,
   action,
 }: {
-  icon: typeof Inbox
-  title: string
-  body: string
-  action?: React.ReactNode
+  readonly icon: typeof Inbox
+  readonly title: string
+  readonly body: string
+  readonly action?: React.ReactNode
 }) {
   return (
     <Card className="py-12">

@@ -37,8 +37,7 @@ export const useStaffStore = create<StaffStore>((set) => ({
     set((state) => {
       const existing = state.sessions[sessionId]
       if (!existing) return state
-      // A submitted record is final. Live typing must never edit one, however
-      // it reached us.
+      // A submitted record is final, however a stray update reached us.
       if (existing.status === 'submitted') return state
       return {
         sessions: {
