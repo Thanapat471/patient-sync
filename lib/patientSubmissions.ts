@@ -16,11 +16,14 @@ type PatientSubmissionRow = {
   emergency_contact_name: string | null
   emergency_contact_relationship: string | null
   religion: string | null
+  submitted_at: string
 }
 
 export type PatientSubmission = {
   sessionId: string
   fields: Partial<Patient>
+  /** Epoch ms — when the record was actually submitted, from the database. */
+  submittedAt: number
 }
 
 export async function insertPatientSubmission(sessionId: string, patient: Patient) {
@@ -45,11 +48,15 @@ export async function insertPatientSubmission(sessionId: string, patient: Patien
 }
 
 export async function fetchPatientSubmissions(): Promise<PatientSubmission[]> {
-  const { data, error } = await supabase.from('patient_submissions').select('*')
+  const { data, error } = await supabase
+    .from('patient_submissions')
+    .select('*')
+    .order('submitted_at', { ascending: false })
   if (error) throw error
 
   return (data as PatientSubmissionRow[]).map((row) => ({
     sessionId: row.session_id,
+    submittedAt: Date.parse(row.submitted_at),
     fields: {
       firstName: row.first_name,
       middleName: row.middle_name ?? undefined,

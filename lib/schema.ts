@@ -4,7 +4,13 @@ export const patientSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   middleName: z.string().optional(),
   lastName: z.string().min(1, 'Last name is required'),
-  dateOfBirth: z.string().min(1, 'Date of birth is required'),
+  dateOfBirth: z
+    .string()
+    .min(1, 'Date of birth is required')
+    .refine((value) => {
+      const parsed = Date.parse(value)
+      return !Number.isNaN(parsed) && parsed <= Date.now()
+    }, 'Date of birth cannot be in the future'),
   gender: z.enum(['male', 'female', 'other'], {
     message: 'Please select a gender',
   }),

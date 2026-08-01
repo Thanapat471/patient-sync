@@ -84,6 +84,10 @@ flow.
   keystroke.
 - **Resilient presence channel** — the presence connection self-heals if it
   silently drops after a period of inactivity, instead of getting stuck.
+- **Inactivity session expiry** — an abandoned form warns the patient, then
+  clears itself and releases the session, so the previous patient's details
+  aren't left readable on a shared device and reception's queue doesn't fill
+  up with sessions nobody is filling in.
 - **Schema-driven UI** — labels, input types and section grouping live in one
   file (`lib/patientFields.ts`), typed against the Zod schema. Adding a field
   means editing the schema and that file; both the patient form and the staff

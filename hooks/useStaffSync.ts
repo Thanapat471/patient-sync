@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useStaffStore, type SessionStatus } from '@/store/useStaffStore'
@@ -57,12 +58,19 @@ export function useStaffSync() {
     fetchPatientSubmissions()
       .then((submissions) => {
         if (cancelled) return
-        submissions.forEach(({ sessionId, fields }) => {
-          upsertSession(sessionId, { fields, status: 'submitted', lastSeen: Date.now() })
+        submissions.forEach(({ sessionId, fields, submittedAt }) => {
+          // lastSeen is the real submission time from the database, so the
+          // "…ago" label survives a staff refresh instead of resetting.
+          upsertSession(sessionId, { fields, status: 'submitted', lastSeen: submittedAt })
         })
       })
       .catch((error) => {
         console.error('Failed to load past patient submissions', error)
+        if (!cancelled) {
+          toast.error('Could not load submitted registrations', {
+            description: 'Live sessions still work. Refresh to retry.',
+          })
+        }
       })
 
     const lobbyChannel = supabase

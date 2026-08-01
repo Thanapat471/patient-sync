@@ -166,6 +166,56 @@ There are two Realtime channels in play, plus one Postgres table:
        else: a patient who is gone is gone from the list, not greyed out in
        it. The 15s idle timer is the only thing that produces that badge.
 
+### Inactivity expiry
+
+Presence is honest about a tab that is simply left open: the socket is alive, so
+the session stays in reception's queue forever with whatever the patient had
+typed still on screen. Nothing on the staff side can fix that without fighting
+presence — the `sync` handler re-adds anything still being advertised — so the
+patient tab, which is the one that knows it has been abandoned, ends its own
+session.
+
+This is the kiosk pattern (airport check-in, ATMs), which is what a registration
+form on a clinic device is. The driver is privacy, not tidiness: the form holds
+name, date of birth, address and religion, and an abandoned session exposes the
+previous patient to whoever sits down next. Automatic termination after
+inactivity is the standard control for this — it's the "automatic logoff"
+specification in the HIPAA Security Rule, §164.312(a)(2)(iii). Clearing the
+staff queue is a side effect.
+
+The ladder, all reset together by any keystroke or window focus:
+
+| After | What happens |
+|---|---|
+| 15s | Staff badge flips to `Inactive`. Nothing is discarded. |
+| 3 min | Sticky "Are you still filling this in?" banner with a 60s countdown and an **I'm still here** button. |
+| +60s | Session expires: presence is untracked, form state is `reset()`, and the page shows "Session ended". |
+
+Notes on the implementation:
+
+- The countdown timer is only armed **when the warning is rendered**, not up
+  front, so the patient always gets the full grace period to react to it.
+- The warning is a sticky banner, not a modal — a modal would trap focus and
+  block the very typing that dismisses it. Any activity (a keystroke, window
+  focus, pressing Submit, the button itself) both resets the timers *and*
+  clears the banner — resetting one without the other leaves a countdown
+  frozen at 0s over a form that is no longer going to expire.
+- Pressing Submit counts as activity so the session cannot expire while the
+  database insert is in flight — expiry mid-insert would untrack presence,
+  staff would drop the session's channels, and the `submitted` broadcast that
+  follows would be lost until a staff refresh.
+- Expiry calls `reset()` as well as swapping the view. Unmounting the inputs
+  clears the screen but would leave the values sitting in react-hook-form state,
+  which defeats the point.
+- `PatientForm` is keyed on `sessionId`, so "Start a new registration" produces a
+  genuinely fresh component rather than one that has to remember to reset itself.
+- There is deliberately no silent auto-resume. Typing after expiry does nothing;
+  the only way forward is a new session. If a different person has walked up,
+  restoring the previous patient's answers is exactly the outcome being avoided.
+
+Both durations are constants at the top of `hooks/usePatientSync.ts` — drop them
+to a few seconds to exercise the flow by hand.
+
 ### Session ids must be minted per visit
 
 `/patient` exists only to generate a `crypto.randomUUID()` and redirect to

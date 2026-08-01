@@ -30,7 +30,10 @@ export default async function PatientSessionPage({
         </p>
       </header>
 
-      <PatientForm sessionId={sessionId} />
+      {/* Keyed on the session so starting a new registration gives a genuinely
+          fresh component — empty form, cleared timers — rather than one that
+          has to remember to reset itself. */}
+      <PatientForm key={sessionId} sessionId={sessionId} />
     </main>
   )
 }

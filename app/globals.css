@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* Base styles for the shadcn `radix-nova` preset. This is why the `shadcn`
+   package stays in `dependencies`, not `devDependencies`: it isn't only the
+   CLI, it ships stylesheet the build needs to resolve. */
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));

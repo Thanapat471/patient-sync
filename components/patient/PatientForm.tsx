@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Controller, useForm, type Control, type FieldError } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CheckCircle2, Loader2, Send } from 'lucide-react'
+import { CheckCircle2, Clock, Loader2, Send, TimerOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { patientSchema, type Patient } from '@/lib/schema'
 import {
@@ -13,7 +13,7 @@ import {
   sections,
   type PatientFieldMeta,
 } from '@/lib/patientFields'
-import { usePatientSync } from '@/hooks/usePatientSync'
+import { SESSION_WARNING_GRACE_MS, usePatientSync } from '@/hooks/usePatientSync'
 import { insertPatientSubmission } from '@/lib/patientSubmissions'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -122,20 +122,67 @@ function FieldRow({
   )
 }
 
+/**
+ * The "are you still there?" prompt. Sticky rather than a modal dialog: a modal
+ * would trap focus and block the very typing that dismisses it.
+ */
+function InactivityWarning({ onStayActive }: { readonly onStayActive: () => void }) {
+  const [secondsLeft, setSecondsLeft] = useState(
+    Math.round(SESSION_WARNING_GRACE_MS / 1000)
+  )
+
+  useEffect(() => {
+    const id = setInterval(() => setSecondsLeft((n) => Math.max(0, n - 1)), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  return (
+    <output
+      aria-live="assertive"
+      className="sticky top-16 z-40 flex flex-col gap-3 rounded-xl border border-primary/40 bg-card px-4 py-3 shadow-lg sm:flex-row sm:items-center sm:justify-between"
+    >
+      <span className="flex items-start gap-2.5 text-sm">
+        <Clock className="mt-0.5 size-4 shrink-0 text-primary" />
+        <span>
+          <span className="font-medium">Are you still filling this in?</span>{' '}
+          <span className="text-muted-foreground">
+            For your privacy, this form clears itself in{' '}
+            <span className="font-medium tabular-nums text-foreground">
+              {secondsLeft}s
+            </span>
+            .
+          </span>
+        </span>
+      </span>
+      <Button onClick={onStayActive} className="h-9 shrink-0 px-4">
+        I’m still here
+      </Button>
+    </output>
+  )
+}
+
 export default function PatientForm({ sessionId }: { readonly sessionId: string }) {
   const router = useRouter()
   const [submitted, setSubmitted] = useState(false)
-  const { sendFieldUpdate, markSubmitted } = usePatientSync(sessionId)
+  const { sendFieldUpdate, markSubmitted, sessionState, keepSessionAlive } =
+    usePatientSync(sessionId)
 
   const {
     register,
     control,
     handleSubmit,
     watch,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<Patient>({
     resolver: zodResolver(patientSchema),
   })
+
+  // The point of expiring is that the previous patient's details stop being
+  // readable, so drop them from form state too — not just from the screen.
+  useEffect(() => {
+    if (sessionState === 'expired') reset()
+  }, [sessionState, reset])
 
   useEffect(() => {
     const subscription = watch((value, { name }) => {
@@ -146,6 +193,11 @@ export default function PatientForm({ sessionId }: { readonly sessionId: string 
   }, [watch, sendFieldUpdate])
 
   const onSubmit = async (data: Patient) => {
+    // Pressing Submit is activity. Without this, a patient who reacts to the
+    // inactivity warning by submitting can have the session expire while the
+    // insert is still in flight — expiry untracks presence, staff drops the
+    // session channel, and the `submitted` broadcast that follows is lost.
+    keepSessionAlive()
     try {
       await insertPatientSubmission(sessionId, data)
       markSubmitted()
@@ -155,6 +207,31 @@ export default function PatientForm({ sessionId }: { readonly sessionId: string 
         description: 'Something went wrong on our side. Please try again.',
       })
     }
+  }
+
+  if (!submitted && sessionState === 'expired') {
+    return (
+      <Card className="py-10">
+        <CardContent className="flex flex-col items-center gap-3 text-center">
+          <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <TimerOff className="size-6" />
+          </span>
+          <div>
+            <p className="text-lg font-medium text-foreground">Session ended</p>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground text-pretty">
+              This form was inactive for a while, so we cleared it to keep your
+              details private. Nothing was submitted.
+            </p>
+          </div>
+          <Button
+            className="mt-2 h-10 px-4"
+            onClick={() => router.replace(`/patient/${crypto.randomUUID()}`)}
+          >
+            Start a new registration
+          </Button>
+        </CardContent>
+      </Card>
+    )
   }
 
   if (submitted) {
@@ -190,6 +267,10 @@ export default function PatientForm({ sessionId }: { readonly sessionId: string 
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+      {sessionState === 'warning' && (
+        <InactivityWarning onStayActive={keepSessionAlive} />
+      )}
+
       {sections.map((section) => (
         <Card key={section.id}>
           <CardHeader>
